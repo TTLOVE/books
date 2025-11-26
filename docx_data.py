@@ -155,17 +155,19 @@ def process_yilian_docx():
     print("=" * 80)
     
     group_chapters = {}
-    index = 0
+    chapter_index = 0
+    current_chapter_index = 0
     current_page = 0
+    content = ""
     for i, chapter in enumerate(chapters, 1):
         if chapter['title'] == "":
             continue
 
         title, page = get_title_and_page(chapter['title'])
         if title not in group_chapters:
-            index += 1
+            chapter_index += 1
             group_chapters[title] = {
-                "title":  f"第 {index} 章: {title}",
+                "title":  f"第 {chapter_index} 章: {title}",
             }
 
         if page > 0:
@@ -175,7 +177,18 @@ def process_yilian_docx():
 
         title = group_chapters[title]
         print(title['title'], current_page)
-        get_ai_response_and_insert_data(title['title'], chapter['content'], current_page)
+
+        # 章变化,则先发送内容到AI,然后清空内容
+        if current_chapter_index != chapter_index and current_chapter_index != 0:
+            print(f"章变化,发送内容到AI: {current_page}")
+            if current_page >= 95:
+                get_ai_response_and_insert_data(chapter_index - 1, content)
+
+            content = chapter['content']
+        else:
+            content = content + chapter['content']
+
+        current_chapter_index = chapter_index
 
     
     # 输出统计信息
@@ -189,62 +202,117 @@ def process_yilian_docx():
     # for i, chapter in enumerate(chapters, 1):
     #     print(f"{i:3d}. {chapter['title']}")
 
-def get_ai_response_and_insert_data(title, content, page):
+def get_ai_response_and_insert_data(captcher: int, content):
     try:
-        result_data = get_ai_response(content)
+        result_data = get_ai_response(captcher, content)
         if len(result_data) == 0:
             print("result_data is empty")
             return
 
-        # print(result_data)
+        # print("解释后的数据:", result_data)
         batch_data = []
+        
+        # """ {
+        #     "knowledge_id": "K_ATT_1_0-72月_045",
+        #     "relevant_age_group": ["0-3月", "3-6月", "6-9月", "9-12月", "12-15月", "15-18月", "18-24月", "24-30月", "30-36月", "36-48月", "48-60月", "60-72月"],
+        #     "original_text_segment": "对于一个幼儿或者成人来说，他是处于一种安全状态、焦虑状态还是忧郁状态，很大程度上是取决于他的首要依恋对象是否是可接近的、可到达的和有反应的。",
+        #     "text_location": "第1章第24页第2段",
+        #     "extraction_context": "论述依恋对象可接近性对情绪状态的核心影响",
+        #     "inference_level": "理论推论",
+        #     "extraction_basis": "从理论论述中推理出依恋对象可接近性和反应性是决定幼儿情绪状态的关键因素，适用于整个儿童期",
+        #     "confidence_level": "高置信度",
+        #     "original_age_reference": "幼儿或成人",
+        #     "content_summary": "依恋对象可接近性和反应性是决定幼儿情绪状态（安全、焦虑、忧郁）的关键因素",
+        #     "source_document": "依恋三部曲・第二卷分离",
+        #     "development_aspect": ["行为表现", "影响因素"],
+        #     "domain_category": ["社会行为"],
+        #     "sensitive_period": {
+        #     "category": "人际",
+        #     "manifestation": "对依恋对象可接近性敏感，影响整体情绪健康"
+        #     },
+        #     "intelligence_development": {
+        #     "category": "内省",
+        #     "manifestation": "能感知依恋对象可用性并调节情绪"
+        #     },
+        #     "evidence_quality": "强证据",
+        #     "extraction_notes": "基于理论总结，年龄范围从幼儿期扩展到整个儿童期"
+        # }"""
+
         # Process the new response format: result_data is a list of objects
         for item in result_data:
-            content = item.get("content", "")
             relevant_age_group = item.get("relevant_age_group", "")
-            relevant_domain = item.get("relevant_domain", "其他")
-            tags = item.get("tags", [])
+            original_text_segment = item.get("original_text_segment", "")
+            text_location = item.get("text_location", "")
+            extraction_context = item.get("extraction_context", "")
+            inference_level = item.get("inference_level", "")
+            extraction_basis = item.get("extraction_basis", "")
+            confidence_level = item.get("confidence_level", "")
+            original_age_reference = item.get("original_age_reference", "")
+            content_summary = item.get("content_summary", "")
+            source_document = item.get("source_document", "")
+            development_aspect = item.get("development_aspect", [])
+            domain_category = item.get("domain_category", [])
+            sensitive_period = item.get("sensitive_period", {})
+            intelligence_development = item.get("intelligence_development", {})
+            evidence_quality = item.get("evidence_quality", "")
+            extraction_notes = item.get("extraction_notes", "")
 
             # Convert single values to lists if needed
             if isinstance(relevant_age_group, str):
                 relevant_age_group = (
                     [relevant_age_group] if relevant_age_group else []
                 )
-            if isinstance(relevant_domain, str):
-                relevant_domain = [relevant_domain] if relevant_domain else []
+            if isinstance(development_aspect, str):
+                development_aspect = [development_aspect] if development_aspect else []
+            if isinstance(domain_category, str):
+                domain_category = [domain_category] if domain_category else []
+            if isinstance(sensitive_period, str):
+                sensitive_period = [sensitive_period] if sensitive_period else []
+            if isinstance(intelligence_development, str):
+                intelligence_development = [intelligence_development] if intelligence_development else []
 
-            tags_json = json.dumps(tags, ensure_ascii=False)
-            categories_json = json.dumps(relevant_domain, ensure_ascii=False)
-            ages_json = json.dumps(relevant_age_group, ensure_ascii=False)
-            summary = content  # Use the content as summary since that's where the main text is
+            relevant_age_group = json.dumps(relevant_age_group, ensure_ascii=False)
+            development_aspect = json.dumps(development_aspect, ensure_ascii=False)
+            domain_category = json.dumps(domain_category, ensure_ascii=False)
+            sensitive_period = json.dumps(sensitive_period, ensure_ascii=False)
+            intelligence_development = json.dumps(intelligence_development, ensure_ascii=False)
 
             # Add data to batch list instead of inserting individually
             batch_data.append(
                 (
-                    "依恋三部曲•第二卷分离",
-                    title,
-                    summary,
-                    "",
-                    tags_json,
-                    categories_json,
-                    ages_json,
-                    page,
+                    relevant_age_group,
+                    original_text_segment,
+                    text_location,
+                    extraction_context,
+                    inference_level,
+                    extraction_basis,
+                    confidence_level,
+                    original_age_reference,
+                    content_summary,
+                    source_document,
+                    development_aspect,
+                    domain_category,
+                    sensitive_period,
+                    intelligence_development,
+                    evidence_quality,
+                    extraction_notes,
                 )
             )
 
     except json.JSONDecodeError as e:
-        print(f"❌ JSON 解析错误 for chapter {i}: {e}")
+        print(f"❌ JSON 解析错误 for chapter: {e}")
         print(f"AI response was: {result_data}")
         return
     except Exception as e:
-        print(f"❌ 处理章节 {title} 时发生错误: {e}")
+        print(f"❌ 处理章节 {captcher} 时发生错误: {e}")
         return
 
     # Perform batch insertion
     if batch_data:
-        from bookModel import batch_insert_data
+        from bookModel import batch_insert_knowledge
 
-        success = batch_insert_data(batch_data)
+        # print("batch_data: ", batch_data)
+        success = batch_insert_knowledge(batch_data)
         if success:
             print(f"✅ 批量插入 {len(batch_data)} 条记录成功")
         else:
