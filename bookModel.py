@@ -2,8 +2,8 @@ import mysql.connector
 
 # Connect to MySQL database
 connection = mysql.connector.connect(
-    # host="192.168.31.147",
-    host="192.168.5.111",
+    host="192.168.31.147",
+    # host="192.168.5.111",
     database="books",  # Replace with your database name
     user="root",  # Replace with your MySQL username
     password="qt123",  # Replace with your MySQL password

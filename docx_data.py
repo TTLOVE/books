@@ -5,6 +5,8 @@ import re
 import os
 import json
 from aiClient import get_ai_response
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 def split_chapters_by_pattern(text):
     """
@@ -159,6 +161,10 @@ def process_yilian_docx():
     current_chapter_index = 0
     current_page = 0
     content = ""
+    
+    # Store the tasks to be run concurrently
+    ai_tasks = []
+    
     for i, chapter in enumerate(chapters, 1):
         if chapter['title'] == "":
             continue
@@ -178,17 +184,35 @@ def process_yilian_docx():
         title = group_chapters[title]
         print(title['title'], current_page)
 
-        # 章变化,则先发送内容到AI,然后清空内容
+        # 章变化,则先将AI任务添加到列表,然后清空内容
         if current_chapter_index != chapter_index and current_chapter_index != 0:
-            print(f"章变化,发送内容到AI: {current_page}")
+            print(f"章变化,准备发送内容到AI: {current_page}")
             if current_page >= 95:
-                get_ai_response_and_insert_data(chapter_index - 1, content)
-
+                ai_tasks.append((chapter_index - 1, content))
             content = chapter['content']
         else:
             content = content + chapter['content']
 
         current_chapter_index = chapter_index
+    
+    # Add the last content if there's any
+    if content and current_chapter_index > 0:
+        print(f"准备发送最后一部分内容到AI: {current_page}")
+        if current_page >= 95:
+            ai_tasks.append((current_chapter_index, content))
+    
+    # Execute all AI tasks concurrently
+    if ai_tasks:
+        print(f"🚀 开始并发处理 {len(ai_tasks)} 个AI任务...")
+        with ThreadPoolExecutor() as executor:
+            # Submit all tasks
+            futures = [executor.submit(get_ai_response_and_insert_data, chapter_idx, cont) 
+                      for chapter_idx, cont in ai_tasks]
+            
+            # Wait for all tasks to complete
+            for future in futures:
+                future.result()  # This ensures any exceptions are raised
+        print("✅ 所有AI任务完成")
 
     
     # 输出统计信息

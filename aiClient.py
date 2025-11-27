@@ -380,6 +380,7 @@ SYSTEM_PROMPT_8 = """
 ```
 """
 
+
 def get_user_prompt(captcher: int, text: str) -> str:
     return f"以下为第{captcher}个章节的文本内容。\n\n「{text}」"
 
@@ -401,5 +402,5 @@ def get_ai_response(captcher: int, text: str) -> Any:
     )
 
     # print("user_prompt: ", get_user_prompt(text))
-    # print("response: ", response.choices[0].message.content)
+    print("章节: ", captcher, "response: ", response.choices[0].message.content)
     return json.loads(response.choices[0].message.content)
